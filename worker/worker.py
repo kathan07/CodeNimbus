@@ -30,15 +30,17 @@ class CodeExecutor:
         
         try:
             # Prepare paths
-            code_path = os.path.join(temp_dir, 'solution')
+            code_path = os.path.join(temp_dir, 'solution' + os.path.splitext(code_file)[1])
             input_path = os.path.join(temp_dir, 'input.txt')
             output_path = os.path.join(temp_dir, 'output.txt')
+            executable_path = os.path.join(temp_dir, 'solution')
             
-            # Copy input and output files
+            # Copy code, input, and output files
+            shutil.copy(code_file, code_path)
             shutil.copy(input_file, input_path)
             shutil.copy(output_file, output_path)
             
-            return temp_dir, code_path, input_path, output_path
+            return temp_dir, code_path, executable_path, input_path, output_path
         
         except Exception as e:
             shutil.rmtree(temp_dir, ignore_errors=True)
@@ -47,7 +49,7 @@ class CodeExecutor:
     @staticmethod
     def execute_python_code(code_file, input_file, output_file):
         # Create secure execution environment
-        temp_dir, code_path, input_path, output_path = CodeExecutor.prepare_execution_environment(
+        temp_dir, code_path, _, input_path, output_path = CodeExecutor.prepare_execution_environment(
             code_file, input_file, output_file
         )
         
@@ -57,7 +59,7 @@ class CodeExecutor:
             
             # Run the code with input and output files
             process = subprocess.Popen(
-                ['python3', '-W', 'ignore', code_file],
+                ['python3', '-W', 'ignore', code_path],
                 stdin=open(input_path, 'r'),
                 stdout=open(output_path + '.actual', 'w'),
                 stderr=subprocess.PIPE,
@@ -103,7 +105,7 @@ class CodeExecutor:
     @staticmethod
     def execute_c_code(code_file, input_file, output_file):
         # Create secure execution environment
-        temp_dir, executable_path, input_path, output_path = CodeExecutor.prepare_execution_environment(
+        temp_dir, code_path, executable_path, input_path, output_path = CodeExecutor.prepare_execution_environment(
             code_file, input_file, output_file
         )
         
@@ -116,7 +118,7 @@ class CodeExecutor:
                  '-static',       # Static linking to reduce external dependencies
                  '-fno-stack-protector',  # Reduce potential exploit surface
                  '-Wl,-z,noexecstack',   # No executable stack
-                 code_file, 
+                 code_path, 
                  '-o', executable_path
                 ],
                 capture_output=True,
@@ -182,7 +184,7 @@ class CodeExecutor:
     @staticmethod
     def execute_cpp_code(code_file, input_file, output_file):
         # Create secure execution environment
-        temp_dir, executable_path, input_path, output_path = CodeExecutor.prepare_execution_environment(
+        temp_dir, code_path, executable_path, input_path, output_path = CodeExecutor.prepare_execution_environment(
             code_file, input_file, output_file
         )
         
@@ -195,7 +197,7 @@ class CodeExecutor:
                  '-static',       # Static linking to reduce external dependencies
                  '-fno-stack-protector',  # Reduce potential exploit surface
                  '-Wl,-z,noexecstack',   # No executable stack
-                 code_file, 
+                 code_path, 
                  '-o', executable_path
                 ],
                 capture_output=True,
