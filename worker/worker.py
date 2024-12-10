@@ -8,6 +8,7 @@ import time
 import resource
 import signal
 import sys
+import urllib.parse
 
 class SecuritySandbox:
     @staticmethod
@@ -261,7 +262,23 @@ class CodeExecutor:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
 def worker():
-    redis_client = redis.Redis(host='localhost', port=6379)
+    # Parse Redis URL
+    redis_url = os.environ.get('REDIS_URL', 'rediss://username:password@host:port')
+    parsed_url = urllib.parse.urlparse(redis_url)
+    redis_host = parsed_url.hostname
+    redis_port = parsed_url.port or 6379
+    redis_username = parsed_url.username or 'default'
+    redis_password = parsed_url.password or ''
+
+    # Create Redis client
+    redis_client = redis.Redis(
+        host=redis_host,
+        port=redis_port,
+        username=redis_username,
+        password=redis_password,
+        ssl=True if parsed_url.scheme == 'rediss' else False,
+        ssl_cert_reqs='none'
+    )
     
     while True:
         try:
@@ -317,7 +334,7 @@ def worker():
                     }),
                     ex=3600  # Expire after 1 hour
                 )
-        
+
         except Exception as e:
             # Log unexpected errors
             print(f"Unexpected error in worker: {e}")

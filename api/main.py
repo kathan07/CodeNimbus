@@ -8,6 +8,7 @@ import os
 import shutil
 from datetime import datetime
 import json
+import urllib.parse
 
 class CodeSubmission(BaseModel):
     language: str = Field(..., description="Programming language (python/c/cpp)")
@@ -18,11 +19,25 @@ app = FastAPI(
     description="API for submitting code solutions and tracking job status"
 )
 
-# Configure Redis connection
-redis_client = redis.Redis(host='localhost', port=6379, db=0)
+# Configure Redis connection from environment variable
+redis_url = os.environ.get('REDIS_URL', 'rediss://username:password@host:port')
+parsed_url = urllib.parse.urlparse(redis_url)
+redis_host = parsed_url.hostname
+redis_port = parsed_url.port or 6379
+redis_username = parsed_url.username or 'default'
+redis_password = parsed_url.password or ''
+
+redis_client = redis.Redis(
+    host=redis_host,
+    port=redis_port,
+    username=redis_username,
+    password=redis_password,
+    ssl=True if parsed_url.scheme == 'rediss' else False,
+    ssl_cert_reqs='none'
+)
 
 # Ensure upload directories exist
-UPLOAD_DIR = os.path.join(os.getcwd(), "uploads")  # Creates the 'uploads' folder in the current working directory
+UPLOAD_DIR = os.path.join(os.getcwd(), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
  
 def save_uploaded_file(upload_file: UploadFile, directory: str) -> str:
@@ -80,7 +95,7 @@ async def submit_solution(
         redis_client.rpush('code_execution_queue', json.dumps(job_payload))
         
         # Set initial job status
-        redis_client.hmset(f'job:{job_id}', {
+        redis_client.hset(f'job:{job_id}', mapping={
             'status': 'queued',
             'created_at': str(datetime.now())
         })
@@ -118,28 +133,54 @@ async def get_job_status(job_id: str):
     if not job_status:
         raise HTTPException(status_code=404, detail="Job not found")
     
-    # Convert byte strings to regular strings
-    job_status = {k.decode(): v.decode() for k, v in job_status.items()}
-    
     return job_status
 
 @app.get("/recent-submissions")
 async def get_recent_submissions(limit: int = 10):
     """
-    Retrieve recent job submissions
+    Retrieve recent job submissions with updated status
     """
-    # This would typically involve more complex tracking in a production system
-    recent_jobs = redis_client.keys('job:*')
-    
+    # Get recent job keys
+    recent_jobs = [key.decode('utf-8') for key in redis_client.keys('job:*')]
+
     submissions = []
     for job_key in recent_jobs[-limit:]:
+        job_id = job_key.split(':')[1]
+        
+        # First, check if there's a completed job result
+        job_result_key = f'job_result:{job_id}'
+        job_result = redis_client.get(job_result_key)
+        
+        # Retrieve the original job status
         job_status = redis_client.hgetall(job_key)
+        
+        # Decode job status dictionary keys and values
+        decoded_job_status = {
+            k.decode('utf-8'): v.decode('utf-8') 
+            for k, v in job_status.items()
+        }
+        
+        # If job result exists, update the status
+        if job_result:
+            result_data = json.loads(job_result.decode('utf-8'))
+            
+            # Update status based on job result
+            if result_data.get('status') == 'completed':
+                decoded_job_status['status'] = 'completed'
+                decoded_job_status['passed'] = str(result_data.get('passed', False))
+            elif result_data.get('status') == 'error':
+                decoded_job_status['status'] = 'error'
+                decoded_job_status['error'] = result_data.get('error', 'Unknown error')
+        
         submission = {
-            'job_id': job_key.decode().split(':')[1],
-            **{k.decode(): v.decode() for k, v in job_status.items()}
+            'job_id': job_id,
+            **decoded_job_status
         }
         submissions.append(submission)
-    
+
+    # Sort submissions by creation time (most recent first)
+    submissions.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+
     return submissions
 
 if __name__ == "__main__":
