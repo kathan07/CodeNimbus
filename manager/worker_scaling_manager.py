@@ -180,13 +180,13 @@ class WorkerScalingManager:
 def main():
     # Configuration from environment variables
     redis_url = os.environ.get('REDIS_URL', 'rediss://username:password@host:port')
-    vm_ips = os.environ.get('VM_IPS', '192.168.1.100,192.168.1.101,192.168.1.102').split(',')
+    vm_ips = os.environ.get('VM_IPS', '192.168.122.204,192.168.122.202,192.168.122.224').split(',')
     
     # VM Credentials (ideally use secure vault/secret management)
     vm_credentials = {
         vm_ip: {
-            'username': os.environ.get(f'{vm_ip.replace(".", "_")}_USERNAME', 'default_username'),
-            'password': os.environ.get(f'{vm_ip.replace(".", "_")}_PASSWORD', 'default_password')
+            'username': 'cloud',
+            'password': 'cloud'
         } for vm_ip in vm_ips
     }
 

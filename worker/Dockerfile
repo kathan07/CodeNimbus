@@ -1,38 +1,45 @@
-# Use an official Python runtime as a parent image
+# Use official Python slim image with Bullseye for stability and security
 FROM python:3.9-slim-bullseye
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+# Prevent Python from writing bytecode and buffering outputs
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    # Set default Redis URL (can be overridden)
+    REDIS_URL=rediss://red-ctc7l3tumphs73b2aee0:kzQppr0FwtANbjuQqoo5GiwM53VuVFCz@singapore-redis.render.com:6379
 
-# Install system dependencies
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies with minimal layers
 RUN apt-get update && apt-get install -y \
     build-essential \
     gcc \
     g++ \
     python3-dev \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /var/cache/apt/archives/*
 
-# Set the working directory in the container
-WORKDIR /app
+# Create directories for code execution with restricted permissions
+RUN mkdir -p /tmp/code_execution \
+    && chmod 750 /tmp/code_execution
 
-# Copy the worker script and requirements file
-COPY worker.py .
-COPY requirements.txt .
+# Copy application files
+COPY worker.py requirements.txt ./
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Create a non-root user for security
-RUN groupadd -r codeexec && useradd -r -g codeexec codeexec
-
-# Set appropriate permissions
-RUN mkdir -p /tmp/code_execution \
-    && chown -R codeexec:codeexec /app /tmp/code_execution \
-    && chmod 750 /tmp/code_execution
+# Create a non-root user for enhanced security
+RUN groupadd -r codeexec \
+    && useradd -r -g codeexec -s /bin/bash codeexec \
+    && chown -R codeexec:codeexec /app /tmp/code_execution
 
 # Switch to non-root user
 USER codeexec
+
+# Expose any necessary ports (if needed)
+# EXPOSE 8000
 
 # Run the worker script
 CMD ["python", "worker.py"]

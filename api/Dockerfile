@@ -1,42 +1,44 @@
-# Use an official Python runtime as a parent image
+# Use official Python slim image
 FROM python:3.9-slim-bullseye
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+# Prevent Python from writing bytecode and buffer outputs
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    # Set environment variables for Redis connection
+    REDIS_URL=rediss://red-ctc7l3tumphs73b2aee0:kzQppr0FwtANbjuQqoo5GiwM53VuVFCz@singapore-redis.render.com:6379
 
-# Set the working directory in the container
+# Set working directory
 WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /var/cache/apt/archives/*
 
-# Create uploads directory
-RUN mkdir -p /app/uploads
+# Create uploads directory with correct permissions
+RUN mkdir -p /app/uploads && chmod 750 /app/uploads
 
-# Copy requirements file
+# Copy project files
 COPY requirements.txt .
-
-# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the FastAPI application code
+# Copy application code
 COPY main.py .
 
-# Create a non-root user for security
-RUN groupadd -r fastapi && useradd -r -g fastapi fastapi
+# Create non-root user
+RUN groupadd -r fastapi && \
+    useradd -r -g fastapi -s /bin/bash fastapi
 
-# Set appropriate permissions
-RUN chown -R fastapi:fastapi /app /app/uploads \
-    && chmod 750 /app/uploads
+# Set ownership and permissions
+RUN chown -R fastapi:fastapi /app /app/uploads
 
 # Switch to non-root user
 USER fastapi
 
-# Expose the port the app runs on
+# Expose application port
 EXPOSE 8000
 
-# Use environment variables for configuration
+# Run the application
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

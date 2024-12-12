@@ -1,0 +1,15 @@
+# Core Redis Client
+redis==5.2.1
+
+# JSON handling
+simplejson==3.19.2
+
+# For parsing Redis URL
+urllib3==1.26.20
+
+# Optional but recommended security packages
+cryptography==43.0.0
+pyOpenSSL==24.2.1
+
+# Error tracking (optional)
+sentry-sdk==2.17.0

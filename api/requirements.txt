@@ -1,0 +1,37 @@
+# Core FastAPI and ASGI server
+fastapi==0.115.4
+uvicorn==0.32.0
+
+# Pydantic for data validation
+pydantic==2.9.2
+pydantic_core==2.23.4
+
+# Redis for job queuing and status tracking
+redis==5.2.1
+upstash-redis==1.2.0
+
+# Async networking
+aiohttp==3.10.5
+aiodns==3.2.0
+
+# File handling and multipart requests
+python-multipart==0.0.19
+
+# Additional useful packages
+requests==2.32.3
+urllib3==1.26.20
+
+# Error tracking (optional)
+sentry-sdk==2.17.0
+
+# Security
+cryptography==43.0.0
+
+# UUID generation
+uuid==1.30
+
+# Optional: for additional async capabilities
+aiohappyeyeballs==2.4.3
+
+# JSON handling
+simplejson==3.19.2

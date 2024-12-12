@@ -1,0 +1,12 @@
+# Core dependencies for Worker Scaling Manager
+redis==5.2.1
+paramiko==3.5.0
+docker==7.1.0
+urllib3==1.26.20
+
+# Logging and type hints
+typing==3.7.4.3
+logging==0.5.1.2
+
+# Additional security and connection handling
+cryptography==43.0.0
