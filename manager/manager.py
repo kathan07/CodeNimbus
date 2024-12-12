@@ -6,6 +6,7 @@ import docker
 import json
 import logging
 from typing import List, Dict
+import urllib.parse
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -29,8 +30,22 @@ class WorkerScalingManager:
         :param queue_name: Redis queue to monitor
         :param jobs_per_worker: Number of jobs per worker before scaling
         """
+        # Parse Redis URL
+        parsed_url = urllib.parse.urlparse(redis_url)
+        redis_host = parsed_url.hostname
+        redis_port = parsed_url.port or 6379
+        redis_username = parsed_url.username or 'default'
+        redis_password = parsed_url.password or ''
+
         # Redis connection
-        self.redis_client = redis.from_url(redis_url)
+        self.redis_client = redis.Redis(
+            host=redis_host,
+            port=redis_port,
+            username=redis_username,
+            password=redis_password,
+            ssl=True if parsed_url.scheme == 'rediss' else False,
+            ssl_cert_reqs='none'
+        )
         
         # VM Configuration
         self.vm_ips = vm_ips
@@ -164,14 +179,14 @@ class WorkerScalingManager:
 
 def main():
     # Configuration from environment variables
-    redis_url = os.environ.get('REDIS_URL', 'redis://default:password@host:port')
+    redis_url = os.environ.get('REDIS_URL', 'rediss://username:password@host:port')
     vm_ips = os.environ.get('VM_IPS', '192.168.1.100,192.168.1.101,192.168.1.102').split(',')
     
     # VM Credentials (ideally use secure vault/secret management)
     vm_credentials = {
         vm_ip: {
-            'username': os.environ.get(f'{vm_ip.replace(".", "_")}_USERNAME'),
-            'password': os.environ.get(f'{vm_ip.replace(".", "_")}_PASSWORD')
+            'username': os.environ.get(f'{vm_ip.replace(".", "_")}_USERNAME', 'default_username'),
+            'password': os.environ.get(f'{vm_ip.replace(".", "_")}_PASSWORD', 'default_password')
         } for vm_ip in vm_ips
     }
 
