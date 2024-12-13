@@ -5,10 +5,10 @@ from typing import List
 import redis
 import uuid
 import os
-import shutil
 from datetime import datetime
 import json
 import urllib.parse
+from supabase import create_client, Client
 
 class CodeSubmission(BaseModel):
     language: str = Field(..., description="Programming language (python/c/cpp)")
@@ -16,10 +16,15 @@ class CodeSubmission(BaseModel):
 
 app = FastAPI(
     title="Code Execution Submission API",
-    description="API for submitting code solutions and tracking job status"
+    description="API for submitting code solutions and tracking job status with Supabase storage"
 )
 
-# Configure Redis connection from environment variable
+# Supabase configuration
+SUPABASE_URL = os.environ.get('SUPABASE_URL')
+SUPABASE_KEY = os.environ.get('SUPABASE_KEY')
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# Redis configuration
 redis_url = os.environ.get('REDIS_URL', 'rediss://username:password@host:port')
 parsed_url = urllib.parse.urlparse(redis_url)
 redis_host = parsed_url.hostname
@@ -36,24 +41,32 @@ redis_client = redis.Redis(
     ssl_cert_reqs='none'
 )
 
-# Ensure upload directories exist
-UPLOAD_DIR = os.path.join(os.getcwd(), "uploads")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
- 
-def save_uploaded_file(upload_file: UploadFile, directory: str) -> str:
+def upload_to_supabase(upload_file: UploadFile, bucket_name: str) -> str:
     """
-    Save an uploaded file to a specific directory and return its path
+    Upload file to Supabase storage and return the public URL
     """
-    # Generate unique filename
+    # Generate a unique filename
     file_extension = os.path.splitext(upload_file.filename)[1]
     unique_filename = f"{uuid.uuid4()}{file_extension}"
-    file_path = os.path.join(directory, unique_filename)
     
-    # Save file
-    with open(file_path, 'wb') as buffer:
-        shutil.copyfileobj(upload_file.file, buffer)
+    # Read file content
+    file_content = upload_file.file.read()
     
-    return file_path
+    # Upload to Supabase storage
+    try:
+        # Upload the file
+        supabase.storage.from_(bucket_name).upload(
+            file=file_content, 
+            path=unique_filename,
+            file_options={"content-type": upload_file.content_type}
+        )
+        
+        # Get public URL
+        public_url = supabase.storage.from_(bucket_name).get_public_url(unique_filename)
+        
+        return public_url
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
 
 @app.post("/submit-solution")
 async def submit_solution(
@@ -65,7 +78,7 @@ async def submit_solution(
     output_file: UploadFile = File(...)
 ):
     """
-    Submit a code solution with input and output files
+    Submit a code solution with input and output files to Supabase storage
     """
     # Validate language
     if language not in ['python', 'c', 'cpp']:
@@ -75,19 +88,19 @@ async def submit_solution(
     job_id = str(uuid.uuid4())
     
     try:
-        # Save uploaded files
-        code_path = save_uploaded_file(code, UPLOAD_DIR)
-        input_path = save_uploaded_file(input_file, UPLOAD_DIR)
-        output_path = save_uploaded_file(output_file, UPLOAD_DIR)
+        # Upload files to Supabase buckets
+        code_url = upload_to_supabase(code, 'code-files')
+        input_url = upload_to_supabase(input_file, 'input-files')
+        output_url = upload_to_supabase(output_file, 'output-files')
         
-        # Prepare job payload
+        # Prepare job payload with Supabase URLs
         job_payload = {
             'job_id': job_id,
             'language': language,
             'problem_id': problem_id,
-            'code_file': code_path,
-            'input_file': input_path,
-            'output_file': output_path,
+            'code_file_url': code_url,
+            'input_file_url': input_url,
+            'output_file_url': output_url,
             'submission_time': str(datetime.now())
         }
         
@@ -107,11 +120,6 @@ async def submit_solution(
         }
     
     except Exception as e:
-        # Clean up any uploaded files in case of error
-        for path in [code_path, input_path, output_path]:
-            if path and os.path.exists(path):
-                os.unlink(path)
-        
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/job-status/{job_id}")
@@ -133,7 +141,7 @@ async def get_job_status(job_id: str):
     if not job_status:
         raise HTTPException(status_code=404, detail="Job not found")
     
-    return job_status
+    return {k.decode('utf-8'): v.decode('utf-8') for k, v in job_status.items()}
 
 @app.get("/recent-submissions")
 async def get_recent_submissions(limit: int = 10):

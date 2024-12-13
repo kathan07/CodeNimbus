@@ -9,6 +9,7 @@ import resource
 import signal
 import sys
 import urllib.parse
+import requests
 
 class SecuritySandbox:
     @staticmethod
@@ -25,21 +26,37 @@ class SecuritySandbox:
 
 class CodeExecutor:
     @staticmethod
-    def prepare_execution_environment(code_file, input_file, output_file):
+    def download_file(file_url: str, local_path: str):
+        """
+        Download a file from a given URL to a local path
+        """
+        response = requests.get(file_url)
+        response.raise_for_status()
+        
+        with open(local_path, 'wb') as f:
+            f.write(response.content)
+        
+        return local_path
+
+    @staticmethod
+    def prepare_execution_environment(code_url, input_url, output_url):
         # Create a secure temporary directory
         temp_dir = tempfile.mkdtemp()
         
         try:
+            # Determine file extensions
+            code_ext = os.path.splitext(code_url)[1]
+            
             # Prepare paths
-            code_path = os.path.join(temp_dir, 'solution' + os.path.splitext(code_file)[1])
+            code_path = os.path.join(temp_dir, f'solution{code_ext}')
             input_path = os.path.join(temp_dir, 'input.txt')
             output_path = os.path.join(temp_dir, 'output.txt')
             executable_path = os.path.join(temp_dir, 'solution')
             
-            # Copy code, input, and output files
-            shutil.copy(code_file, code_path)
-            shutil.copy(input_file, input_path)
-            shutil.copy(output_file, output_path)
+            # Download files
+            CodeExecutor.download_file(code_url, code_path)
+            CodeExecutor.download_file(input_url, input_path)
+            CodeExecutor.download_file(output_url, output_path)
             
             return temp_dir, code_path, executable_path, input_path, output_path
         
@@ -48,10 +65,10 @@ class CodeExecutor:
             raise
 
     @staticmethod
-    def execute_python_code(code_file, input_file, output_file):
+    def execute_python_code(code_url, input_url, output_url):
         # Create secure execution environment
         temp_dir, code_path, _, input_path, output_path = CodeExecutor.prepare_execution_environment(
-            code_file, input_file, output_file
+            code_url, input_url, output_url
         )
         
         try:
@@ -104,10 +121,10 @@ class CodeExecutor:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
     @staticmethod
-    def execute_c_code(code_file, input_file, output_file):
+    def execute_c_code(code_url, input_url, output_url):
         # Create secure execution environment
         temp_dir, code_path, executable_path, input_path, output_path = CodeExecutor.prepare_execution_environment(
-            code_file, input_file, output_file
+            code_url, input_url, output_url
         )
         
         try:
@@ -183,10 +200,10 @@ class CodeExecutor:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
     @staticmethod
-    def execute_cpp_code(code_file, input_file, output_file):
+    def execute_cpp_code(code_url, input_url, output_url):
         # Create secure execution environment
         temp_dir, code_path, executable_path, input_path, output_path = CodeExecutor.prepare_execution_environment(
-            code_file, input_file, output_file
+            code_url, input_url, output_url
         )
         
         try:
@@ -287,29 +304,29 @@ def worker():
             job = json.loads(job_data)
             
             try:
-                # Validate job has all required files
-                required_files = ['code_file', 'input_file', 'output_file']
-                if not all(f in job for f in required_files):
-                    raise ValueError("Missing required files")
+                # Validate job has all required URLs
+                required_urls = ['code_file_url', 'input_file_url', 'output_file_url']
+                if not all(f in job for f in required_urls):
+                    raise ValueError("Missing required file URLs")
                 
                 # Execute code based on language
                 if job['language'] == 'python':
                     result = CodeExecutor.execute_python_code(
-                        job['code_file'], 
-                        job['input_file'],
-                        job['output_file']
+                        job['code_file_url'], 
+                        job['input_file_url'],
+                        job['output_file_url']
                     )
                 elif job['language'] == 'c':
                     result = CodeExecutor.execute_c_code(
-                        job['code_file'], 
-                        job['input_file'],
-                        job['output_file']
+                        job['code_file_url'], 
+                        job['input_file_url'],
+                        job['output_file_url']
                     )
                 elif job['language'] == 'cpp':
                     result = CodeExecutor.execute_cpp_code(
-                        job['code_file'], 
-                        job['input_file'],
-                        job['output_file']
+                        job['code_file_url'], 
+                        job['input_file_url'],
+                        job['output_file_url']
                     )
                 else:
                     raise ValueError(f"Unsupported language: {job['language']}")

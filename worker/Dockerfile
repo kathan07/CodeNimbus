@@ -1,10 +1,10 @@
 # Use official Python slim image with Bullseye for stability and security
-FROM python:3.9-slim-bullseye
+FROM python:3.11-slim-bullseye
 
 # Prevent Python from writing bytecode and buffering outputs
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    # Set default Redis URL (can be overridden)
+    # Set default Redis URL (hardcoded as requested)
     REDIS_URL=rediss://red-ctc7l3tumphs73b2aee0:kzQppr0FwtANbjuQqoo5GiwM53VuVFCz@singapore-redis.render.com:6379
 
 # Set working directory
@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     python3-dev \
+    wget \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /var/cache/apt/archives/*
@@ -37,9 +38,6 @@ RUN groupadd -r codeexec \
 
 # Switch to non-root user
 USER codeexec
-
-# Expose any necessary ports (if needed)
-# EXPOSE 8000
 
 # Run the worker script
 CMD ["python", "worker.py"]

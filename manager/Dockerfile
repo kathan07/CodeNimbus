@@ -24,7 +24,7 @@ VOLUME /var/run/docker.sock
 
 # Set environment variables with default values
 ENV REDIS_URL=rediss://red-ctc7l3tumphs73b2aee0:kzQppr0FwtANbjuQqoo5GiwM53VuVFCz@singapore-redis.render.com:6379
-ENV VM_IPS=192.168.122.204,192.168.122.202,192.168.122.224
+ENV VM_IPS=192.168.122.176,192.168.122.121,192.168.122.7
 
 # Set up logging directory
 RUN mkdir -p /var/log/worker-scaling-manager

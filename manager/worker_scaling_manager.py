@@ -17,7 +17,7 @@ class WorkerScalingManager:
                  redis_url: str, 
                  vm_ips: List[str], 
                  vm_credentials: Dict[str, Dict[str, str]],
-                 worker_image: str = 'worker-image:latest',
+                 worker_image: str = 'kathan07/worker',
                  queue_name: str = 'code_execution_queue',
                  jobs_per_worker: int = 5):
         """
@@ -85,8 +85,7 @@ class WorkerScalingManager:
             
             # Docker run command with Redis connection
             docker_cmd = (
-                f"docker run -d --name {worker_name} "
-                f"-e REDIS_URL={os.environ.get('REDIS_URL')} "
+                f"sudo docker run -d --name {worker_name} "
                 f"{self.worker_image}"
             )
             
@@ -118,7 +117,7 @@ class WorkerScalingManager:
             
             # Use docker stats to get CPU usage for worker containers
             stats_cmd = (
-                "docker stats --no-stream --format '{{.Name}},{{.CPUPerc}}' "
+                "sudo docker stats --no-stream --format '{{.Name}},{{.CPUPerc}}' "
                 "| grep '^worker-' "
                 "| sort -t',' -k2 -n "  # Sort by CPU percentage
                 "| head -n 1 "  # Get the container with lowest CPU usage
@@ -159,6 +158,7 @@ class WorkerScalingManager:
             try:
                 queue_length = self.get_queue_length()
                 total_workers = sum(self.vm_worker_counts.values())
+                print(total_workers + " " + queue_length)
                 required_workers = max(1, queue_length // self.jobs_per_worker)
 
                 if required_workers > total_workers:
