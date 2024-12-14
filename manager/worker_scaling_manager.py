@@ -2,7 +2,6 @@ import os
 import time
 import redis
 import paramiko
-import docker
 import json
 import logging
 from typing import List, Dict
@@ -19,9 +18,10 @@ class WorkerScalingManager:
                  vm_credentials: Dict[str, Dict[str, str]],
                  worker_image: str = 'kathan07/worker',
                  queue_name: str = 'code_execution_queue',
-                 jobs_per_worker: int = 5):
+                 jobs_per_worker: int = 5,
+                 scaling_interval: int = 10):
         """
-        Initialize scaling manager
+        Initialize scaling manager with configuration from environment variables
         
         :param redis_url: External Redis URL
         :param vm_ips: List of VM IP addresses
@@ -29,6 +29,7 @@ class WorkerScalingManager:
         :param worker_image: Docker image for workers
         :param queue_name: Redis queue to monitor
         :param jobs_per_worker: Number of jobs per worker before scaling
+        :param scaling_interval: Time between scaling checks
         """
         # Parse Redis URL
         parsed_url = urllib.parse.urlparse(redis_url)
@@ -53,6 +54,7 @@ class WorkerScalingManager:
         self.worker_image = worker_image
         self.queue_name = queue_name
         self.jobs_per_worker = jobs_per_worker
+        self.scaling_interval = scaling_interval
         
         # Track worker distribution
         self.vm_worker_counts = {vm: 0 for vm in vm_ips}
@@ -209,33 +211,77 @@ class WorkerScalingManager:
                     vm_to_scale = self.get_most_loaded_vm()
                     self.scale_down_worker(vm_to_scale)
                 
-                time.sleep(10)  # Check every 30 seconds
+                time.sleep(self.scaling_interval)
             
             except Exception as e:
                 logger.error(f"Scaling error: {e}")
-                time.sleep(10)
+                time.sleep(self.scaling_interval)
 
-
-def main():
-    # Configuration from environment variables
-    redis_url = os.environ.get('REDIS_URL', 'rediss://username:password@host:port')
-    vm_ips = '192.168.122.7,192.168.122.121'.split(',')
+def load_config_from_env():
+    """
+    Load configuration from environment variables
     
-    # VM Credentials (ideally use secure vault/secret management)
-    vm_credentials = {
-        vm_ip: {
-            'username': 'cloud',
-            'password': 'cloud'
-        } for vm_ip in vm_ips
+    Environment Variables:
+    - REDIS_URL: Full Redis connection URL
+    - VM_IPS: Comma-separated list of VM IP addresses
+    - VM_CREDENTIALS: JSON string of VM credentials
+    - WORKER_IMAGE: Docker image for workers (optional)
+    - QUEUE_NAME: Redis queue name (optional)
+    - JOBS_PER_WORKER: Number of jobs per worker (optional)
+    - SCALING_INTERVAL: Time between scaling checks (optional)
+    """
+    # Redis URL (required)
+    redis_url = os.environ.get('REDIS_URL')
+    if not redis_url:
+        raise ValueError("REDIS_URL environment variable is required")
+
+    # VM IPs (required)
+    vm_ips_str = os.environ.get('VM_IPS')
+    if not vm_ips_str:
+        raise ValueError("VM_IPS environment variable is required")
+    vm_ips = vm_ips_str.split(',')
+
+    # VM Credentials (required)
+    vm_credentials_str = os.environ.get('VM_CREDENTIALS')
+    if not vm_credentials_str:
+        raise ValueError("VM_CREDENTIALS environment variable is required")
+    
+    try:
+        vm_credentials = json.loads(vm_credentials_str)
+    except json.JSONDecodeError:
+        raise ValueError("Invalid VM_CREDENTIALS JSON format")
+
+    # Optional configurations with defaults
+    worker_image = os.environ.get('WORKER_IMAGE', 'kathan07/worker')
+    queue_name = os.environ.get('QUEUE_NAME', 'code_execution_queue')
+    jobs_per_worker = int(os.environ.get('JOBS_PER_WORKER', '5'))
+    scaling_interval = int(os.environ.get('SCALING_INTERVAL', '10'))
+
+    return {
+        'redis_url': redis_url,
+        'vm_ips': vm_ips,
+        'vm_credentials': vm_credentials,
+        'worker_image': worker_image,
+        'queue_name': queue_name,
+        'jobs_per_worker': jobs_per_worker,
+        'scaling_interval': scaling_interval
     }
 
-    manager = WorkerScalingManager(
-        redis_url=redis_url,
-        vm_ips=vm_ips,
-        vm_credentials=vm_credentials
-    )
+def main():
+    try:
+        # Load configuration from environment variables
+        config = load_config_from_env()
 
-    manager.monitor_and_scale()
+        # Create scaling manager with loaded configuration
+        manager = WorkerScalingManager(**config)
+
+        # Start monitoring and scaling
+        manager.monitor_and_scale()
+
+    except Exception as e:
+        logger.error(f"Initialization error: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     main()
