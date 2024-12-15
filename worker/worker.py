@@ -30,6 +30,9 @@ class CodeExecutor:
         """
         Download a file from a given URL to a local path
         """
+        # Remove query parameters from the local path
+        local_path = local_path.split('?')[0]
+        
         response = requests.get(file_url)
         response.raise_for_status()
         
@@ -45,7 +48,7 @@ class CodeExecutor:
         
         try:
             # Determine file extensions
-            code_ext = os.path.splitext(code_url)[1]
+            code_ext = os.path.splitext(code_url.split('?')[0])[1]
             
             # Prepare paths
             code_path = os.path.join(temp_dir, f'solution{code_ext}')
@@ -131,11 +134,6 @@ class CodeExecutor:
             # Compile the code with strict security flags
             compile_result = subprocess.run(
                 ['gcc', 
-                 '-O2',           # Optimization 
-                 '-w',            # Suppress warnings
-                 '-static',       # Static linking to reduce external dependencies
-                 '-fno-stack-protector',  # Reduce potential exploit surface
-                 '-Wl,-z,noexecstack',   # No executable stack
                  code_path, 
                  '-o', executable_path
                 ],
@@ -201,20 +199,15 @@ class CodeExecutor:
 
     @staticmethod
     def execute_cpp_code(code_url, input_url, output_url):
-        # Create secure execution environment
+        # Create execution environment
         temp_dir, code_path, executable_path, input_path, output_path = CodeExecutor.prepare_execution_environment(
             code_url, input_url, output_url
         )
         
         try:
-            # Compile the code with strict security flags
+            # Compilation with comprehensive options
             compile_result = subprocess.run(
                 ['g++', 
-                 '-O2',           # Optimization 
-                 '-w',            # Suppress warnings
-                 '-static',       # Static linking to reduce external dependencies
-                 '-fno-stack-protector',  # Reduce potential exploit surface
-                 '-Wl,-z,noexecstack',   # No executable stack
                  code_path, 
                  '-o', executable_path
                 ],
