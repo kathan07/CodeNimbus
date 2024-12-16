@@ -10,6 +10,7 @@ import signal
 import sys
 import urllib.parse
 import requests
+from datetime import datetime
 
 class SecuritySandbox:
     @staticmethod
@@ -324,18 +325,47 @@ def worker():
                 else:
                     raise ValueError(f"Unsupported language: {job['language']}")
                 
-                # Store results in Redis
+                # Determine job status and result
+                if result.get('passed', False):
+                    job_status = 'completed'
+                    passed = True
+                else:
+                    job_status = 'failed'
+                    passed = False
+                
+                # Update the job hash with final status
+                redis_client.hset(
+                    f'job:{job["job_id"]}', 
+                    mapping={
+                        'status': job_status,
+                        'completed_at': str(datetime.now()),
+                        'passed': str(passed)
+                    }
+                )
+                
+                # Store detailed results in job_result
                 redis_client.set(
                     f'job_result:{job["job_id"]}', 
                     json.dumps({
-                        'status': 'completed',
+                        'status': job_status,
                         'result': result,
-                        'passed': result.get('passed', False)
+                        'passed': passed
                     }),
                     ex=3600  # Expire after 1 hour
                 )
             
             except Exception as e:
+                # Update job hash with error status
+                redis_client.hset(
+                    f'job:{job["job_id"]}', 
+                    mapping={
+                        'status': 'error',
+                        'completed_at': str(datetime.now()),
+                        'error': str(e)
+                    }
+                )
+                
+                # Store error result
                 redis_client.set(
                     f'job_result:{job["job_id"]}', 
                     json.dumps({
